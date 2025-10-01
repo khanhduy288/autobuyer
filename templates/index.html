@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Auto Buyer Tool</title>
+  <style>
+    img { max-width: 200px; max-height: 200px; }
+    label { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>Auto Buyer</h2>
+
+  <!-- Form lưu URL + ảnh -->
+  <form action="/save" method="post" enctype="multipart/form-data">
+      <label>Nhập link sản phẩm:</label><br>
+      <input type="text" name="url" value="{{ current_url }}" required><br><br>
+
+      <label>Upload ảnh mã sản phẩm:</label><br>
+      <input type="file" name="ma_sp" accept="image/*"><br><br>
+
+      <label>Upload ảnh loại sản phẩm:</label><br>
+      <input type="file" name="loai_sp" accept="image/*"><br><br>
+
+      <button type="submit">Lưu</button>
+  </form>
+
+  <hr>
+
+  <!-- Hiển thị URL và ảnh hiện tại -->
+  <h3>Thông tin hiện tại:</h3>
+  <p><strong>URL hiện tại:</strong> 
+    {% if current_url %}
+      <a href="{{ current_url }}" target="_blank">{{ current_url }}</a>
+    {% else %}
+      Chưa có URL
+    {% endif %}
+  </p>
+
+  {% if ma_sp_exists %}
+    <p><strong>Ảnh mã sản phẩm:</strong><br>
+    <img src="{{ url_for('static', filename='images/ma_sp.png') }}" alt="ma_sp.png"></p>
+  {% else %}
+    <p>Chưa có ảnh mã sản phẩm.</p>
+  {% endif %}
+
+  {% if loai_sp_exists %}
+    <p><strong>Ảnh loại sản phẩm:</strong><br>
+    <img src="{{ url_for('static', filename='images/loai_sp.png') }}" alt="loai_sp.png"></p>
+  {% else %}
+    <p>Chưa có ảnh loại sản phẩm.</p>
+  {% endif %}
+
+  <hr>
+
+  <!-- Nút start workflow -->
+  <button onclick="startWorkflow()">▶️ Start Workflow</button>
+
+  <!-- Hiển thị kết quả workflow -->
+  <pre id="result"></pre>
+
+  <script>
+    async function startWorkflow() {
+      try {
+        const res = await fetch("/start", { method: "POST" });
+        const data = await res.json();
+        document.getElementById("result").innerText = data.result;
+      } catch (err) {
+        document.getElementById("result").innerText = "❌ Lỗi khi chạy workflow: " + err;
+      }
+    }
+  </script>
+</body>
+</html>
