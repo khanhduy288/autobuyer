@@ -5,7 +5,7 @@
   },
   {
     "action": "sleep",
-    "seconds": 2
+    "seconds": 1
   },
   {
     "action": "scroll",
@@ -13,21 +13,23 @@
   },
   {
     "action": "sleep",
-    "seconds": 2
+    "seconds": 1.5
   },
   {
     "action": "wait_and_click_image",
     "image": "ma_sp.png",
-    "retry_interval": 2
+    "retry_interval": 2,
+    "threshold": 0.96
   },
   {
     "action": "wait_and_click_image",
     "image": "loai_sp.png",
-    "retry_interval": 2
+    "retry_interval": 2,
+    "threshold": 0.96
   },
   {
     "action": "sleep",
-    "seconds": 2
+    "seconds": 1
   },
   {
     "action": "click_image",
@@ -39,7 +41,8 @@
   },
   {
     "action": "click_image",
-    "image": "gio_hang.png"
+    "image": "gio_hang.png",
+    "threshold": 0.8
   },
   {
     "action": "sleep",
@@ -48,12 +51,12 @@
   {
     "action": "click_offset",
     "image": "add.png",
-    "x": -20,
+    "x": -22,
     "y": 0
   },
   {
     "action": "sleep",
-    "seconds": 2
+    "seconds": 1
   },
   {
     "action": "input_text",
@@ -85,12 +88,30 @@
   },
   {
     "action": "sleep",
-    "seconds": 2
+    "seconds": 12
+  },
+  {
+    "action": "hotkey",
+    "keys": [
+      "alt",
+      "left"
+    ]
+  },
+  {
+    "action": "sleep",
+    "seconds": 600
+  },
+  {
+    "action": "keep_product"
+  },
+  {
+    "action": "loop_to",
+    "index": 20
   },
   {
     "action": "restart_after",
     "seconds": 400,
-    "url": "https://m.shein.com/jp/KINGSTON-Kingston-RAM-FURY-Beast-DDR5-16GB-32GB-5200MHz-5600MHz-6000MHz-Desktop-AMD-Intel-CPU-Motherboard-Memory-RAMs-p-25685353.html?src_module=cat&src_identifier=fc%3Dall%60sc%3DJust%20for%20You%60tc%3Dあなたにおすすめの商品%60oc%3DRAMs%60ps%3Dtab01navbar01menu01dir2%60jc%3Dreal_4729&src_tab_page_id=page_category1759159257989&showFeedbackRec=1&pageListType=4&imgRatio=3-4"
+    "url": "https://m.shein.com/jp/KINGSTON-Kingston-RAM-FURY-Beast-DDR5-16GB-32GB-5200MHz-5600MHz-6000MHz-Desktop-AMD-Intel-CPU-Motherboard-Memory-RAMs-p-25685353.html"
   },
   {
     "action": "sleep",
