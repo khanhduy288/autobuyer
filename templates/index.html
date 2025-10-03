@@ -11,10 +11,13 @@
 <body>
   <h2>Auto Buyer</h2>
 
-  <!-- Form lưu URL + ảnh -->
+  <!-- Form lưu URL + ảnh + số lượng -->
   <form action="/save" method="post" enctype="multipart/form-data">
       <label>Nhập link sản phẩm:</label><br>
       <input type="text" name="url" value="{{ current_url }}" required><br><br>
+
+      <label>Nhập số lượng:</label><br>
+      <input type="number" name="so_luong" value="{{ current_quantity or 1 }}" min="1" required><br><br>
 
       <label>Upload ảnh mã sản phẩm:</label><br>
       <input type="file" name="ma_sp" accept="image/*"><br><br>
@@ -25,6 +28,7 @@
       <button type="submit">Lưu</button>
   </form>
 
+
   <hr>
 
   <!-- Hiển thị URL và ảnh hiện tại -->
@@ -34,6 +38,14 @@
       <a href="{{ current_url }}" target="_blank">{{ current_url }}</a>
     {% else %}
       Chưa có URL
+    {% endif %}
+  </p>
+
+  <p><strong>Số lượng hiện tại:</strong> 
+    {% if current_quantity %}
+      {{ current_quantity }}
+    {% else %}
+      Chưa có số lượng
     {% endif %}
   </p>
 

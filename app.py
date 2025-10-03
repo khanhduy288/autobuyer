@@ -291,6 +291,8 @@ def run_from_json(json_file):
 @app.route("/")
 def index():
     current_url = ""
+    current_quantity = 1  # mặc định số lượng = 1
+
     if os.path.exists(WORKFLOW_FILE):
         try:
             with open(WORKFLOW_FILE, "r", encoding="utf-8") as f:
@@ -298,45 +300,69 @@ def index():
             for step in steps:
                 if step.get("action") == "restart_after":
                     current_url = step.get("url", "")
-                    break
+                if step.get("action") == "input_text":
+                    # ép thành int an toàn
+                    try:
+                        current_quantity = int(step.get("text", 1))
+                    except:
+                        current_quantity = 1
         except Exception as e:
             print("⚠️ Lỗi đọc workflow.json:", e)
 
     return render_template(
         "index.html",
         current_url=current_url,
+        current_quantity=current_quantity,
         ma_sp_exists=os.path.exists(os.path.join(IMG_PATH, "ma_sp.png")),
         loai_sp_exists=os.path.exists(os.path.join(IMG_PATH, "loai_sp.png"))
     )
 
-
 @app.route("/save", methods=["POST"])
 def save_workflow():
     url = request.form.get("url")
+    so_luong = request.form.get("so_luong")  # số lượng nhập từ form
     file_ma = request.files.get("ma_sp")
     file_loai = request.files.get("loai_sp")
 
+    # lưu ảnh nếu có upload
     if file_ma:
         file_ma.save(os.path.join(IMG_PATH, "ma_sp.png"))
     if file_loai:
         file_loai.save(os.path.join(IMG_PATH, "loai_sp.png"))
 
-    if os.path.exists(WORKFLOW_FILE):
-        with open(WORKFLOW_FILE, "r", encoding="utf-8") as f:
-            workflow = json.load(f)
-    else:
-        return "❌ workflow.json chưa tồn tại, hãy tạo trước", 400
+    # ép số lượng thành int, default 1
+    try:
+        so_luong = str(max(1, int(so_luong)))
+    except:
+        so_luong = "1"
 
-    updated = False
+    # đọc workflow.json
+    if not os.path.exists(WORKFLOW_FILE):
+        return "❌ workflow.json chưa tồn tại", 400
+    with open(WORKFLOW_FILE, "r", encoding="utf-8") as f:
+        workflow = json.load(f)
+
+    # cập nhật step restart_after.url
     for step in workflow:
         if step.get("action") == "restart_after":
             step["url"] = url
+
+    # cập nhật step input_text.text
+    updated = False
+    for step in workflow:
+        if step.get("action") == "input_text":
+            step["text"] = so_luong
             updated = True
             break
 
+    # nếu không có input_text thì thêm vào trước restart_after
     if not updated:
-        return "❌ Không tìm thấy step restart_after", 400
+        for idx, step in enumerate(workflow):
+            if step.get("action") == "restart_after":
+                workflow.insert(idx, {"action": "input_text", "text": so_luong})
+                break
 
+    # ghi lại file
     with open(WORKFLOW_FILE, "w", encoding="utf-8") as f:
         json.dump(workflow, f, ensure_ascii=False, indent=2)
 

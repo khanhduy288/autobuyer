@@ -60,7 +60,7 @@
   },
   {
     "action": "input_text",
-    "text": "5"
+    "text": "9"
   },
   {
     "action": "sleep",
@@ -111,7 +111,8 @@
   {
     "action": "restart_after",
     "seconds": 400,
-    "url": "https://m.shein.com/jp/KINGSTON-Kingston-RAM-FURY-Beast-DDR5-16GB-32GB-5200MHz-5600MHz-6000MHz-Desktop-AMD-Intel-CPU-Motherboard-Memory-RAMs-p-25685353.html"
+    "url": "https://m.shein.com/jp/KINGSTON-Kingston-RAM-FURY-Beast-DDR5-16GB-32GB-5200MHz-5600MHz-6000MHz-Desktop-AMD-Intel-CPU-Motherboard-Memory-RAMs-p-25685353.html",
+    "quantity": 1
   },
   {
     "action": "sleep",
