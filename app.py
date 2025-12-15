@@ -4,17 +4,25 @@ import pyautogui
 import webbrowser
 import os
 import shutil
+import random
 import cv2
 import numpy as np
 import requests
+from PIL import ImageGrab
+import pytesseract
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, redirect
+import re
 
 app = Flask(__name__)
 
 IMG_PATH = "static/images/"
 WORKFLOW_FILE = "workflow.json"
+# đường dẫn tới tesseract.exe (phải đúng)
+pytesseract.pytesseract.tesseract_cmd = r"D:\project8m\autobuyer\tessat\tesseract.exe"
 
+# trỏ tới folder tessdata chứa eng.traineddata, vie.traineddata
+os.environ["TESSDATA_PREFIX"] = r"D:\project8m\autobuyer\tessat\tessdata"
 # đảm bảo thư mục ảnh tồn tại
 os.makedirs(IMG_PATH, exist_ok=True)
 TOKEN = "8399603454:AAFYyIAFPiV8REr-2uYwsEzJax0YgSX1frU"
@@ -37,6 +45,112 @@ def backup_workflow():
         bak_name = WORKFLOW_FILE + f".bak.{ts}"
         shutil.copy(WORKFLOW_FILE, bak_name)
         print(f"🔖 Backup workflow -> {bak_name}")
+
+def ocr_region(region, lang="vie+eng"):
+    """
+    OCR vùng màn hình.
+    region = [x1, y1, x2, y2]
+    lang: 'eng', 'vie' hoặc 'vie+eng'
+    Trả về text.
+    """
+    x1, y1, x2, y2 = region
+    img = ImageGrab.grab(bbox=(x1, y1, x2, y2))
+    text = pytesseract.image_to_string(img, lang=lang)
+    return text
+
+def human_move_to(x, y, min_steps=3, max_steps=6, min_dur=0.08, max_dur=0.28):
+    """Di chuyển mượt đến (x,y) theo vài bước trung gian + jitter (tránh teleport)."""
+    try:
+        sx, sy = pyautogui.position()
+    except Exception:
+        sx, sy = x, y
+    steps = random.randint(min_steps, max_steps)
+    for i in range(steps):
+        nx = sx + (x - sx) * (i+1)/steps + random.uniform(-10, 10)
+        ny = sy + (y - sy) * (i+1)/steps + random.uniform(-10, 10)
+        dur = random.uniform(min_dur, max_dur)
+        pyautogui.moveTo(nx, ny, duration=dur, tween=pyautogui.easeInOutQuad)
+    # nhỏ pause trước hành động tiếp theo
+    time.sleep(random.uniform(0.06, 0.22))
+
+def ocr_chat_list(step):
+    chat_list_region = step.get("chat_list_region")  # [x1, y1, x2, y2]
+    scroll_px = step.get("scroll_px", 400)
+    max_scrolls = step.get("max_scrolls", 50)
+    output_json = step.get("output_json", "all_chats.json")
+
+    all_chat_names = []
+
+    for scroll_i in range(max_scrolls):
+        text = ocr_region(chat_list_region)
+        lines = text.splitlines()
+        chat_names = []
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            # loại bỏ các dòng chắc chắn không phải tên chat
+            if re.match(r'^(Bạn:|@|\\|\)|©|Ww|S|Cloud|https?://|=|4\)|\[|—)', line):
+                continue
+            # dòng quá dài thì bỏ qua (thường là nội dung)
+            if len(line) > 30:
+                continue
+            # loại bỏ những dòng chỉ là ký tự đặc biệt hoặc số
+            if re.match(r'^[\W\d]+$', line):
+                continue
+
+            chat_names.append(line)
+
+        # loại bỏ trùng lặp trong cùng scroll
+        chat_names = list(dict.fromkeys(chat_names))
+        all_chat_names.extend(chat_names)
+
+        # scroll xuống
+        pyautogui.moveTo((chat_list_region[0]+chat_list_region[2])//2, 
+                         (chat_list_region[1]+chat_list_region[3])//2)
+        pyautogui.scroll(-scroll_px)
+        time.sleep(0.5)
+
+    # loại bỏ trùng lặp toàn bộ danh sách
+    all_chat_names = list(dict.fromkeys(all_chat_names))
+
+    with open(output_json, "w", encoding="utf-8") as f:
+        json.dump(all_chat_names, f, ensure_ascii=False, indent=2)
+
+    print(f"✅ OCR danh sách chat -> {output_json}")
+
+def ocr_chat_by_name(step):
+    chat_name = step.get("chat_name")
+    search_box_pos = step.get("search_box_pos")  # [x, y]
+    chat_content_region = step.get("chat_content_region")  # [x1,y1,x2,y2]
+    scroll_px = step.get("scroll_px", 400)
+    max_scrolls = step.get("max_scrolls", 50)
+    output_json = f"{chat_name}.json"
+
+    # nhập tên vào search box
+    pyautogui.click(*search_box_pos)
+    pyautogui.hotkey("ctrl", "a")
+    pyautogui.press("delete")
+    pyautogui.typewrite(chat_name)
+    pyautogui.press("enter")
+    time.sleep(1)
+
+    # click vào kết quả đầu tiên
+    pyautogui.press("down")
+    pyautogui.press("enter")
+    time.sleep(1)
+
+    # OCR toàn bộ chat
+    text = ""
+    for _ in range(max_scrolls):
+        text += ocr_region(chat_content_region) + "\n"
+        pyautogui.scroll(-scroll_px)
+        time.sleep(0.5)
+
+    with open(output_json, "w", encoding="utf-8") as f:
+        json.dump({"chat_name": chat_name, "content": text}, f, ensure_ascii=False, indent=2)
+    print(f"✅ OCR chat {chat_name} -> {output_json}")
 
 
 def find_image_pos(image_path, confidence=0.9, timeout=5):
@@ -123,13 +237,22 @@ def run_from_json(json_file):
             i += 1
 
         elif action == "scroll":
-            px = step.get("px", 500)
+            base_px = step.get("px", 500)
+            px = random.randint(base_px - 20, base_px + 20)  # random ±20 quanh px
+
             screen_w, screen_h = pyautogui.size()
-            pyautogui.moveTo(screen_w // 2, screen_h // 2)
+            target_x, target_y = screen_w // 2 + random.randint(-30, 30), screen_h // 2 + random.randint(-20, 20)
+            human_move_to(target_x, target_y)
+            pyautogui.moveRel(
+                random.uniform(-8, 8),
+                random.uniform(-6, 6),
+                duration=random.uniform(0.06, 0.18)
+            )
             pyautogui.scroll(-px)
-            print(f"🖱 Scroll xuống {px}px")
-            time.sleep(1)
+            print(f"🖱 Human-like scroll xuống {px}px (gốc {base_px}) từ ({target_x}, {target_y})")
+            time.sleep(random.uniform(0.8, 1.6))
             i += 1
+
             
         elif action == "hotkey":
             keys = step.get("keys", [])
@@ -144,29 +267,48 @@ def run_from_json(json_file):
             image = step.get("image")
             retry_interval = step.get("retry_interval", 2)
             timeout_single = step.get("timeout_single", 2)
-            threshold = step.get("threshold", 0.96)  # mặc định 0.96 nếu không truyền
+            threshold = step.get("threshold", 0.87)  # mặc định 0.87 nếu không truyền
 
             print(f"🔄 Chờ và click {image} (threshold={threshold})...")
 
             fail_count = 0  # đếm số lần thất bại liên tiếp
             while True:
-                if find_and_click(image, timeout=timeout_single, confidence=threshold):
-                    print(f"✅ Đã click được {image}")
-                    break
+                pos = find_image_pos(image, confidence=threshold, timeout=timeout_single)
+                if pos:
+                    x, y = pos
+                    print(f"✅ Tìm thấy {image} tại ({x}, {y}) → di chuyển & click nhẹ")
+
+                    # di chuyển mượt giống người
+                    cx, cy = pyautogui.position()
+                    pyautogui.moveTo(
+                        cx + random.uniform(-10, 10),
+                        cy + random.uniform(-10, 10),
+                        duration=random.uniform(0.15, 0.35)
+                    )
+                    pyautogui.moveTo(
+                        x + random.uniform(-3, 3),
+                        y + random.uniform(-3, 3),
+                        duration=random.uniform(0.25, 0.45)
+                    )
+                    pyautogui.click()
+                    print(f"👆 Click xong {image}")
+                    break  # ra khỏi while nếu đã click thành công
+
                 else:
                     fail_count += 1
-                    print(f"⚠️ Không thấy {image} (fail={fail_count}), retry sau {retry_interval}s...")
+                    print(f"⚠️ Không thấy {image} (fail={fail_count}), thử lại sau {retry_interval}s...")
                     time.sleep(retry_interval)
 
-                    # nếu fail 2 lần thì F5 và reset i = 1
+                    # nếu fail 2 lần thì F5 và reset về đầu workflow
                     if fail_count >= 2:
                         print("🔄 Không thấy ảnh 2 lần => F5 lại trang và restart workflow...")
                         pyautogui.press("f5")
-                        time.sleep(5)  # đợi trang load
-                        i = 0  # reset về đầu workflow (vì cuối loop có i += 1, nên i=0 -> sẽ thành 1)
-                        break
+                        time.sleep(5)  # đợi trang load lại
+                        i = 0  # reset về đầu workflow
+                        break  # thoát vòng while, workflow sẽ restart sau khi i += 1
 
             i += 1
+
 
 
         elif action == "click_image":
@@ -235,6 +377,15 @@ def run_from_json(json_file):
                 pyautogui.typewrite(restart_url)
                 pyautogui.press("enter")
             i += 1
+
+        elif action == "ocr_chat_list":
+            ocr_chat_list(step)
+            i += 1
+
+        elif action == "ocr_chat_by_name":
+            ocr_chat_by_name(step)
+            i += 1
+
 
         elif action == "keep_product":
             print("👉 Đang giữ sản phẩm...")
