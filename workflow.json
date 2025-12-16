@@ -3,6 +3,14 @@
   { "action": "sleep", "seconds": 1 },
 
   {
+    "action": "ocr_chat_list",
+    "chat_list_region": [133, 123, 208, 817],
+    "scroll_px": 350,
+    "max_scrolls": 1,
+    "output_json": "static/all_chats.json"
+  },
+
+  {
     "action": "ocr_all_chats_from_list",
     "input_json": "static/all_chats.json",
     "search_image": "search_zalo.png",
