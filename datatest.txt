@@ -6,6 +6,21 @@ https://m.shein.com/jp/KINGSTON-Kingston-RAM-FURY-Beast-DDR5-16GB-32GB-5200MHz-5
 
 
 
+
+  {
+    "action": "ocr_chat_list",
+    "chat_list_region": [133, 123, 208, 817],
+    "scroll_px": 350,
+    "max_scrolls": 10,
+    "output_json": "static/all_chats.json"
+  },
+
+
+
+
+
+
+
   { "action": "type_text", "text": "https://example.com" },
   { "action": "key_press", "key": "enter" },
 

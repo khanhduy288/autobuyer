@@ -27,8 +27,6 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\projectdev\project3m\autobuyer\tess
 os.environ["TESSDATA_PREFIX"] = r"D:\project8m\autobuyer\tessat\tessdata"
 # đảm bảo thư mục ảnh tồn tại
 os.makedirs(IMG_PATH, exist_ok=True)
-TOKEN = "8399603454:AAFYyIAFPiV8REr-2uYws1zJax0YgSX1frU"
-CHAT_ID = -4948414511  
 # ================== SYSTEM PHRASES ==================
 SYSTEM_PHRASES = [
     "tin nhan",
@@ -180,8 +178,16 @@ def ocr_region(region, lang="vie+eng"):
     x, y, w, h = map(int, region)
     img = ImageGrab.grab(bbox=(x, y, x + w, y + h))
 
-    img = img.convert("L")
-    img = img.resize((w * 2, h * 2))
+    img = img.convert("L")  # grayscale
+    img = img.resize((w*2, h*2))  # phóng to
+    # tăng độ tương phản
+    from PIL import ImageEnhance, ImageFilter
+    enhancer = ImageEnhance.Contrast(img)
+    img = enhancer.enhance(2.0)
+    # lọc noise nhẹ
+    img = img.filter(ImageFilter.MedianFilter(size=3))
+    # threshold để bỏ background nhẹ
+    img = img.point(lambda p: 0 if p < 180 else 255)
 
     return pytesseract.image_to_string(
         img,
@@ -199,33 +205,6 @@ def ocr_region_dual(region, lang="vie+eng"):
     text2 = ocr_region([x, y + int(h * 0.15), w, h2], lang)
 
     return text1 + "\n" + text2
-
-
-
-# ================== HUMAN SCROLL ==================
-def human_move_to(x, y, min_steps=3, max_steps=6):
-    try:
-        sx, sy = pyautogui.position()
-    except Exception:
-        sx, sy = x, y
-
-    steps = random.randint(min_steps, max_steps)
-    for i in range(steps):
-        nx = sx + (x - sx) * (i + 1) / steps + random.uniform(-8, 8)
-        ny = sy + (y - sy) * (i + 1) / steps + random.uniform(-8, 8)
-        pyautogui.moveTo(nx, ny, duration=random.uniform(0.08, 0.25))
-
-    time.sleep(random.uniform(0.08, 0.2))
-
-
-# ================== TELEGRAM ==================
-def send_telegram_message(text):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": text}
-    try:
-        requests.post(url, json=payload, timeout=5)
-    except Exception as e:
-        print("⚠️ Telegram error:", e)
 
 
 # ================== BACKUP ==================
@@ -272,20 +251,61 @@ def ocr_chat_list(step):
             if line[0].islower():
                 continue
 
-            # ❌ cắt chữ rác cuối kiểu: "Count Kèr A"
-            line = re.sub(r'\s+[A-Z]$', '', line)
+            # 🔥 CẮT ĐUÔI RÁC: số / ký hiệu / chữ lẻ
+            # VD: "Count Kèr 4" -> "Count Kèr"
+            line = re.sub(r'[\s#\-\._]*[A-Z0-9]{1,3}$', '', line).strip()
 
-            # ❌ các câu preview tin nhắn
+            # ❌ các câu preview tin nhắn (bắt đầu)
             if any(
-                line.lower().startswith(k) for k in [
-                    "đang ", "đã ", "vừa ", "chưa ",
-                    "xin ", "chào ", "ok ", "oki ",
-                    "uh ", "ừ ", "ha ", "à "
+                strip_accents(line).startswith(k) for k in [
+                    "dang ", "da ", "vua ", "chua ",
+                    "xin ", "chao ", "ok ", "oki ",
+                    "uh ", "u ", "ha ", "a "
                 ]
             ):
                 continue
 
-            # ❌ lọc hệ thống / link / message
+            # 🔥 loại câu giống suy nghĩ / tin nhắn
+            if any(
+                strip_accents(line).startswith(k) for k in [
+                    "mk ", "minh ", "gia dinh ", "hien ",
+                    "ket ", "tim ", "nham", "ta xua"
+                ]
+            ):
+                continue
+
+            # 🔥 preview có dấu câu
+            if any(c in line for c in ["!", "?", ".", ","]):
+                continue
+
+            # 🔥 quá dài → giống tin nhắn
+            if len(line.split()) > 5:
+                continue
+
+            # 🔥 auto reply / hệ thống / QC
+            lowered = strip_accents(line)
+            if any(k in lowered for k in [
+                "hien", "dang", "chua", "vui long",
+                "cam on", "nhan duoc", "tu van",
+                "tong dai", "he thong", "khach hang"
+            ]):
+                continue
+
+            # 🔥 OCR noise: quá nhiều từ ngắn
+            words = line.split()
+            if len(words) >= 3:
+                short_words = sum(1 for w in words if len(w) <= 2)
+                if short_words >= 2:
+                    continue
+
+            # 🔥 OCR noise: viết hoa quá nhiều
+            letters = [c for c in line if c.isalpha()]
+            if letters:
+                upper_ratio = sum(c.isupper() for c in letters) / len(letters)
+                if upper_ratio > 0.7:
+                    continue
+
+            # ❌ lọc hệ thống / link / message (logic cũ của bạn)
             if not is_chat_title(line):
                 continue
 
@@ -304,48 +324,148 @@ def ocr_chat_list(step):
             print("🛑 Không có chat mới → STOP")
             break
 
-        human_move_to(cx, cy)
+        pyautogui.moveTo(cx, cy)
         pyautogui.scroll(-scroll_px)
-        time.sleep(0.45)
+        time.sleep(0.4)
 
     with open(output_json, "w", encoding="utf-8") as f:
         json.dump(all_chat_names, f, ensure_ascii=False, indent=2)
 
     print(f"✅ OCR DONE: {len(all_chat_names)} chats")
-    send_telegram_message(f"✅ OCR xong: {len(all_chat_names)} chat")
-
     
-def ocr_chat_by_name(step):
-    chat_name = step.get("chat_name")
-    search_box_pos = step.get("search_box_pos")  # [x, y]
-    chat_content_region = step.get("chat_content_region")  # [x1,y1,x2,y2]
-    scroll_px = step.get("scroll_px", 400)
+def ocr_all_chats_from_list(step):
+    import os, json, time, re
+    import pyautogui
+
+    input_json = step.get("input_json", "static/all_chats.json")
+    search_image = step.get("search_image", "static/images/search_zalo.png")
+    chat_content_region = step["chat_content_region"]  # [x,y,w,h]
+    scroll_px = step.get("scroll_px", 450)
     max_scrolls = step.get("max_scrolls", 50)
-    output_json = f"{chat_name}.json"
+    output_dir = step.get("output_dir", "static/chats")
 
-    # nhập tên vào search box
-    pyautogui.click(*search_box_pos)
-    pyautogui.hotkey("ctrl", "a")
-    pyautogui.press("delete")
-    pyautogui.typewrite(chat_name)
-    pyautogui.press("enter")
-    time.sleep(1)
+    os.makedirs(output_dir, exist_ok=True)
 
-    # click vào kết quả đầu tiên
-    pyautogui.press("down")
-    pyautogui.press("enter")
-    time.sleep(1)
+    if not os.path.exists(input_json):
+        print("❌ Không tìm thấy all_chats.json")
+        return
 
-    # OCR toàn bộ chat
-    text = ""
-    for _ in range(max_scrolls):
-        text += ocr_region(chat_content_region) + "\n"
-        pyautogui.scroll(-scroll_px)
-        time.sleep(0.5)
+    with open(input_json, "r", encoding="utf-8") as f:
+        chat_names = json.load(f)
 
-    with open(output_json, "w", encoding="utf-8") as f:
-        json.dump({"chat_name": chat_name, "content": text}, f, ensure_ascii=False, indent=2)
-    print(f"✅ OCR chat {chat_name} -> {output_json}")
+    x, y, w, h = chat_content_region
+    cx = x + w // 2
+    cy = y + h // 2
+
+    def clean_line(line):
+        line = line.strip()
+        
+        # loại emoji
+        line = re.sub("[\U00010000-\U0010ffff]", "", line)
+        
+        # loại URL
+        if re.search(r'https?://', line):
+            return None
+        # loại dòng toàn ký tự đặc biệt/số
+        if re.fullmatch(r'[\W\d_]+', line):
+            return None
+        # loại dòng quá ngắn
+        if len(line) < 5:
+            return None
+        # loại từ khóa rác OCR
+        if any(word in line.lower() for word in [
+            "sticker", "dang tam dung", "he thong", "success", "process", "sandbox", "browser"
+        ]):
+            return None
+        # loại ngày, giờ, phút, gid
+        if re.search(r'\d{1,2}[:h giờ]|gid|phút|ngày|/|\\', line):
+            return None
+        # chỉ giữ chữ và số, bỏ ký tự lạ
+        if not re.search(r'[a-zA-Z0-9]', line):
+            return None
+        
+        return line
+
+    for idx, chat_name in enumerate(chat_names, 1):
+        print(f"\n📨 [{idx}/{len(chat_names)}] OCR CHAT: {chat_name}")
+
+        # 1️⃣ click icon search
+        if not find_and_click(search_image, confidence=0.85, timeout=8):
+            print("❌ Không click được search → skip")
+            continue
+        time.sleep(0.8)
+
+        # 2️⃣ nhập tên chat
+        query = strip_accents(chat_name)
+        query = re.sub(r'[^A-Za-z0-9 ]+', '', query)
+        query = re.sub(r'\s+', ' ', query).strip()
+
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.05)
+        pyautogui.press("backspace")
+        time.sleep(0.05)
+        pyautogui.write(query, interval=0.04)
+        time.sleep(1)
+
+        # 3️⃣ click kết quả đầu
+        pyautogui.press("enter")
+        time.sleep(1.2)
+
+        # 🔹 click giữa chat để hủy focus latest message
+        pyautogui.moveTo(cx, cy)
+        pyautogui.click()
+        time.sleep(0.3)
+
+        # 4️⃣ OCR nội dung chat (scroll ngược lên lấy tin cũ)
+        chat_text_lines = []
+        no_new_text = 0
+        stop_threshold = 10
+
+        for _ in range(max_scrolls):
+            text = ocr_region(chat_content_region).strip()
+            lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+            # --- CLEAN LINES ---
+            cleaned_lines = []
+            for line in lines:
+                cl = clean_line(line)
+                if cl and cl not in chat_text_lines:
+                    cleaned_lines.append(cl)
+
+            if not cleaned_lines:
+                no_new_text += 1
+            else:
+                chat_text_lines.extend(cleaned_lines)
+                no_new_text = 0
+
+            if no_new_text >= stop_threshold:
+                break
+
+            # scroll ngược lên để lấy tin nhắn cũ
+            pyautogui.moveTo(cx, cy)
+            pyautogui.scroll(scroll_px)
+            time.sleep(0.5)
+
+        # 5️⃣ lưu file
+        chat_text = "\n".join(chat_text_lines)
+        safe_name = re.sub(r'[\\/:*?"<>|]', "_", chat_name)
+        out_file = os.path.join(output_dir, f"{safe_name}.json")
+
+        with open(out_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "chat_name": chat_name,
+                    "content": chat_text.strip()
+                },
+                f,
+                ensure_ascii=False,
+                indent=2
+            )
+
+        print(f"✅ Saved: {out_file}")
+        time.sleep(1)
+
+
 
 
 def find_image_pos(image_path, confidence=0.9, timeout=5):
@@ -577,8 +697,8 @@ def run_from_json(json_file):
             ocr_chat_list(step)
             i += 1
 
-        elif action == "ocr_chat_by_name":
-            ocr_chat_by_name(step)
+        elif action == "ocr_all_chats_from_list":
+            ocr_all_chats_from_list(step)
             i += 1
 
 
@@ -619,8 +739,6 @@ def run_from_json(json_file):
 
             # ✅ sau khi xong hết danh sách ảnh, tăng i
             i += 1
-            send_telegram_message("✅ Đơn hàng đã được giữ thành công!")
-
 
         elif action == "loop_to":
             target = step.get("index", 0)

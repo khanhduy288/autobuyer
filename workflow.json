@@ -1,12 +1,15 @@
-
 [
   { "action": "click_image", "image": "forcustab.png" },
   { "action": "sleep", "seconds": 1 },
+
   {
-    "action": "ocr_chat_list",
-    "chat_list_region": [133, 123, 208, 817],
-    "scroll_px": 350,
+    "action": "ocr_all_chats_from_list",
+    "input_json": "static/all_chats.json",
+    "search_image": "search_zalo.png",
+    "chat_content_region": [474, 169, 1099, 768],
+    "scroll_px": 400,
     "max_scrolls": 10,
-    "output_json": "static/all_chats.json"
+    "output_dir": "static/chats"
   }
+
 ]
