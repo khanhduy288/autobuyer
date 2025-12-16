@@ -2,85 +2,168 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Auto Buyer Tool</title>
+  <title>Danh sách chat Zalo</title>
+
   <style>
-    img { max-width: 200px; max-height: 200px; }
-    label { font-weight: bold; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      padding: 20px;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+    }
+
+    .controls {
+      margin-bottom: 12px;
+    }
+
+    button {
+      padding: 8px 14px;
+      font-size: 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      margin-right: 10px;
+    }
+
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+
+    #status {
+      font-size: 13px;
+      color: #555;
+    }
+
+    input {
+      width: 320px;
+      padding: 8px;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    li {
+      background: #fff;
+      margin-bottom: 6px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+      font-size: 14px;
+    }
+
+    .index {
+      float: right;
+      color: #888;
+      font-size: 11px;
+    }
   </style>
 </head>
 <body>
-  <h2>Auto Buyer</h2>
 
-  <!-- Form lưu URL + ảnh + số lượng -->
-  <form action="/save" method="post" enctype="multipart/form-data">
-      <label>Nhập link sản phẩm:</label><br>
-      <input type="text" name="url" value="{{ current_url }}" required><br><br>
+  <h2>📋 Danh sách chat Zalo</h2>
 
-      <label>Nhập số lượng:</label><br>
-      <input type="number" name="so_luong" value="{{ current_quantity or 1 }}" min="1" required><br><br>
+  <div class="controls">
+    <button id="startBtn">▶️ Start Tool</button>
+    <span id="status"></span>
+  </div>
 
-      <label>Upload ảnh mã sản phẩm:</label><br>
-      <input type="file" name="ma_sp" accept="image/*"><br><br>
+  <input
+    type="text"
+    id="search"
+    placeholder="🔍 Tìm tên chat..."
+  >
 
-      <label>Upload ảnh loại sản phẩm:</label><br>
-      <input type="file" name="loai_sp" accept="image/*"><br><br>
-
-      <button type="submit">Lưu</button>
-  </form>
-
-
-  <hr>
-
-  <!-- Hiển thị URL và ảnh hiện tại -->
-  <h3>Thông tin hiện tại:</h3>
-  <p><strong>URL hiện tại:</strong> 
-    {% if current_url %}
-      <a href="{{ current_url }}" target="_blank">{{ current_url }}</a>
-    {% else %}
-      Chưa có URL
-    {% endif %}
-  </p>
-
-  <p><strong>Số lượng hiện tại:</strong> 
-    {% if current_quantity %}
-      {{ current_quantity }}
-    {% else %}
-      Chưa có số lượng
-    {% endif %}
-  </p>
-
-  {% if ma_sp_exists %}
-    <p><strong>Ảnh mã sản phẩm:</strong><br>
-    <img src="{{ url_for('static', filename='images/ma_sp.png') }}" alt="ma_sp.png"></p>
-  {% else %}
-    <p>Chưa có ảnh mã sản phẩm.</p>
-  {% endif %}
-
-  {% if loai_sp_exists %}
-    <p><strong>Ảnh loại sản phẩm:</strong><br>
-    <img src="{{ url_for('static', filename='images/loai_sp.png') }}" alt="loai_sp.png"></p>
-  {% else %}
-    <p>Chưa có ảnh loại sản phẩm.</p>
-  {% endif %}
-
-  <hr>
-
-  <!-- Nút start workflow -->
-  <button onclick="startWorkflow()">▶️ Start Workflow</button>
-
-  <!-- Hiển thị kết quả workflow -->
-  <pre id="result"></pre>
+  <ul id="chatList">
+    <li>⏳ Đang tải dữ liệu...</li>
+  </ul>
 
   <script>
-    async function startWorkflow() {
-      try {
-        const res = await fetch("/start", { method: "POST" });
-        const data = await res.json();
-        document.getElementById("result").innerText = data.result;
-      } catch (err) {
-        document.getElementById("result").innerText = "❌ Lỗi khi chạy workflow: " + err;
-      }
+    const chatListEl = document.getElementById("chatList");
+    const searchInput = document.getElementById("search");
+    const startBtn = document.getElementById("startBtn");
+    const statusEl = document.getElementById("status");
+
+    let allChats = [];
+
+    // 👉 FETCH FILE JSON TRONG STATIC
+    fetch("/static/all_chats.json", { cache: "no-store" })
+      .then(res => {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then(data => {
+        if (!Array.isArray(data)) {
+          throw new Error("JSON không phải mảng");
+        }
+
+        allChats = data
+          .map(s => s.trim())
+          .filter(s => s.length > 1);
+
+        render(allChats);
+      })
+      .catch(err => {
+        console.error(err);
+        chatListEl.innerHTML =
+          "<li>❌ Không load được all_chats.json</li>";
+      });
+
+    function render(list) {
+      chatListEl.innerHTML = "";
+
+      list.forEach((name, idx) => {
+        const li = document.createElement("li");
+        li.textContent = name;
+
+        const span = document.createElement("span");
+        span.className = "index";
+        span.textContent = "#" + (idx + 1);
+
+        li.appendChild(span);
+        chatListEl.appendChild(li);
+      });
     }
+
+    searchInput.addEventListener("input", () => {
+      const keyword = searchInput.value.toLowerCase();
+      const filtered = allChats.filter(name =>
+        name.toLowerCase().includes(keyword)
+      );
+      render(filtered);
+    });
+
+    // ▶️ START TOOL
+    startBtn.addEventListener("click", async () => {
+      startBtn.disabled = true;
+      statusEl.textContent = "⏳ Tool đang chạy...";
+
+      try {
+        const res = await fetch("/start", {
+          method: "POST"
+        });
+
+        const data = await res.json();
+        statusEl.textContent = "✅ " + data.result;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "❌ Lỗi khi chạy tool";
+      } finally {
+        startBtn.disabled = false;
+      }
+    });
   </script>
+
 </body>
 </html>

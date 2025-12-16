@@ -1,11 +1,12 @@
+
 [
-  {"action": "click_image", "image": "forcustab.png"},
-  {"action": "sleep", "seconds": 1},
+  { "action": "click_image", "image": "forcustab.png" },
+  { "action": "sleep", "seconds": 1 },
   {
     "action": "ocr_chat_list",
-    "chat_list_region": [100, 200, 300, 800],
-    "scroll_px": 400,
-    "max_scrolls": 50,
-    "output_json": "all_chats.json"
+    "chat_list_region": [133, 123, 208, 817],
+    "scroll_px": 350,
+    "max_scrolls": 10,
+    "output_json": "static/all_chats.json"
   }
 ]
